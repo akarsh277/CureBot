@@ -104,3 +104,11 @@ document.addEventListener("mousemove", (e) => {
     shape.style.transform = `translate(${x * speed}px, ${y * speed}px)`;
   });
 });
+document.addEventListener("mousemove", (e) => {
+    document.querySelectorAll(".star").forEach(star => {
+        let speed = 0.02;
+        let x = (window.innerWidth - e.pageX * speed);
+        let y = (window.innerHeight - e.pageY * speed);
+        star.style.transform = `translate(${x}px, ${y}px)`;
+    });
+});

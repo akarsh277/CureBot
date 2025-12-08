@@ -41,7 +41,7 @@ body::after {
   z-index: -1;
 }
 .chat-container {
-  width: 75vmin; /* makes a perfect square (responsive) */
+  width: 100vmin; /* makes a perfect square (responsive) */
   height: 75vmin;
   background: rgba(255, 255, 255, 0.45);
   -webkit-backdrop-filter: blur(20px);
@@ -235,22 +235,28 @@ body::after {
 /* Dark Mode */
 .dark {
   background-color: #1e1e1e;
+  background: radial-gradient(circle at 70% 50%, #1a2635, #0b0e14 70%);
 }
 
 .dark .chat-container {
-  background: #2c2c2c;
+  background: rgba(30,30,30,0.55);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
-
 .dark #user-input {
   background: #333;
   color: white;
 }
-
-.dark .bot-message {
-  background: #444;
-  color: #eee;
+.dark .user-message {
+  background: #0078ff;
 }
-
+.dark .bot-message {
+  background: #3b3b3b;
+  color: #e7e7e7;
+}
+.dark .typing {
+  background: #3b3b3b;
+}
 #theme-toggle {
   position: fixed;
   right: 15px;
@@ -315,6 +321,7 @@ body:hover .bg-shape {
   border-radius: 50%;
   opacity: 0.8;
   animation: twinkle 2s infinite ease-in-out alternate;
+  transition: transform 0.15s ease-out;
 }
 
 @keyframes twinkle {
@@ -330,4 +337,35 @@ body:hover .bg-shape {
     transform: scale(1);
     opacity: 1;
   }
+}
+/* Scrollbar Style */
+.chat-box::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Light Mode Scrollbar */
+.chat-box::-webkit-scrollbar-thumb {
+  background: #000; /* Black for light mode */
+  border-radius: 10px;
+}
+
+.chat-box::-webkit-scrollbar-thumb:hover {
+  background: #333; /* Slightly lighter hover */
+}
+
+/* Dark Mode Scrollbar */
+.dark .chat-box::-webkit-scrollbar-thumb {
+  background: rgba(0, 136, 255, 0.65);
+}
+
+.dark .chat-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 136, 255, 0.9);
+}
+
+.dark .chat-box::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
 }
