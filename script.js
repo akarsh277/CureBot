@@ -7,11 +7,10 @@ let farmerInfo = {
   language: "",
   state: "",
   district: "",
-  crop: ""
+  crop: "",
 };
 
 let setupCompleteFlag = false;
-
 
 function autoScroll() {
   window.scrollTo(0, document.body.scrollHeight);
@@ -54,20 +53,19 @@ async function botResponse(message) {
     language: farmerInfo.language,
     state: farmerInfo.state,
     district: farmerInfo.district,
-    crop: farmerInfo.crop
+    crop: farmerInfo.crop,
   };
 
   try {
     const res = await fetch("http://127.0.0.1:5000/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
 
     const data = await res.json();
     typingDiv.remove();
     addMessage(data.response, "bot");
-
   } catch (err) {
     typingDiv.remove();
     addMessage("⚠️ Something went wrong!", "bot");
@@ -84,7 +82,15 @@ function sendMessage() {
   if (!setupCompleteFlag) {
     switch (setupStep) {
       case 0:
-        farmerInfo.language = input.toLowerCase();
+        if (input === "1") {
+          farmerInfo.language = "english";
+        } else if (input === "2") {
+          farmerInfo.language = "telugu";
+        } else if (input === "3") {
+          farmerInfo.language = "telugu-eng";
+        } else {
+          farmerInfo.language = "english";
+        }
         setupStep++;
         askState();
         return;
@@ -112,7 +118,6 @@ function sendMessage() {
   // After setup complete → Chatbot normal mode
   botResponse(input);
 }
-
 
 function createStars(count = 40) {
   const starsContainer = document.getElementById("stars");
@@ -169,15 +174,18 @@ document.addEventListener("mousemove", (e) => {
   });
 });
 document.addEventListener("mousemove", (e) => {
-    document.querySelectorAll(".star").forEach(star => {
-        let speed = 0.02;
-        let x = (window.innerWidth - e.pageX * speed);
-        let y = (window.innerHeight - e.pageY * speed);
-        star.style.transform = `translate(${x}px, ${y}px)`;
-    });
+  document.querySelectorAll(".star").forEach((star) => {
+    let speed = 0.02;
+    let x = window.innerWidth - e.pageX * speed;
+    let y = window.innerHeight - e.pageY * speed;
+    star.style.transform = `translate(${x}px, ${y}px)`;
+  });
 });
 function askLanguage() {
-  addMessage("🌐 Please select your language:\n1️⃣ English\n2️⃣ Telugu\n3️⃣ Telugu in English (Eng+Tel)", "bot");
+  addMessage(
+    "🌐 Please select your language:\n1️⃣ English\n2️⃣ Telugu\n3️⃣ Telugu in English (Eng+Tel)",
+    "bot"
+  );
 }
 
 function askState() {
@@ -193,5 +201,8 @@ function askCrop() {
 }
 
 function setupComplete() {
-  addMessage(`✔ Done! Mee details save chesanu.\nLet's start farming assistance! 😊`, "bot");
+  addMessage(
+    `✔ Done! Mee details save chesanu.\nLet's start farming assistance! 😊`,
+    "bot"
+  );
 }

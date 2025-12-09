@@ -15,7 +15,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = os.getenv("GEMINI_API_KEY")  # You will add Gemini key to .env later
+API_KEY = os.getenv("API_KEY")  # You will add Gemini key to .env later
 WEATHER_KEY = os.getenv("WEATHER_API_KEY")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
@@ -48,54 +48,34 @@ def get_weather(district):
 @app.post("/chat")
 async def chat(payload: dict):
     user_text = payload.get("message", "")
-    language = payload.get("language", "English")
-    state = payload.get("state", "")
-    district = payload.get("district", "")
-    crop = payload.get("crop", "")
+    language = payload.get("language", "english")
 
-    weather_info = get_weather(district)
-
-    weather_text = ""
-    if weather_info:
-        weather_text = f"""
-Current Weather in {district}:
-• {weather_info['description']}
-• Temperature: {weather_info['temp']}°C
-• Humidity: {weather_info['humidity']}%
-
-Crop Impact:
-- If humidity > 70%, high chance of fungal disease attack.
-"""
-
-    prompt = f"""
-User Message: {user_text}
-
-Farmer Profile:
-Language: {language}
-State: {state}
-District: {district}
-Crop: {crop}
-
-Weather & Crop Notes:
-{weather_text}
-
-Your Goal:
-Respond in selected language.
-Help farmers in a friendly way with crop tips, weather warnings, and organic fertilizer suggestions.
-Ask follow-up questions if needed.
-"""
+    # Select language output rules
+    if language == "english":
+        system_prompt = "Respond in pure English only. Keep it simple."
+    elif language == "telugu":
+        system_prompt = "Respond fully in Telugu (తెలుగు), no English words."
+    elif language == "telugu-eng":
+        system_prompt = "Respond in Telugu using English letters only."
+    else:
+        system_prompt = "Respond in pure English only."
 
     response = requests.post(
-        f"{GEMINI_URL}?key={API_KEY}",
-        json={"contents": [{"role": "user", "parts": [{"text": prompt}]}]},
+        f"{API_URL}?key={API_KEY}",
+        json={
+            "contents": [
+                {"role": "system", "parts": [{"text": system_prompt}]},
+                {"role": "user", "parts": [{"text": user_text}]}
+            ]
+        },
         headers={"Content-Type": "application/json"}
     )
 
-    data = response.json()
     try:
+        data = response.json()
         reply = data["candidates"][0]["content"]["parts"][0]["text"]
-    except:
-        print("DEBUG:", data)
-        reply = "⚠️ Weather/Gemini response error!"
+    except Exception as e:
+        print("DEBUG RESPONSE:", data)
+        reply = "⚠️ Gemini response error!"
 
     return {"response": reply}
