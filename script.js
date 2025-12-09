@@ -13,8 +13,12 @@ let farmerInfo = {
 let setupCompleteFlag = false;
 
 function autoScroll() {
-  window.scrollTo(0, document.body.scrollHeight);
+  chatBox.scrollTo({
+    top: chatBox.scrollHeight,
+    behavior: "smooth"
+  });
 }
+
 
 // Add message
 function addMessage(message, sender) {
@@ -66,6 +70,7 @@ async function botResponse(message) {
     const data = await res.json();
     typingDiv.remove();
     addMessage(data.response, "bot");
+    speak(data.response, farmerInfo.language);
   } catch (err) {
     typingDiv.remove();
     addMessage("⚠️ Something went wrong!", "bot");
@@ -118,6 +123,8 @@ function sendMessage() {
   // After setup complete → Chatbot normal mode
   botResponse(input);
 }
+autoScroll();
+// Starfield effect 
 
 function createStars(count = 40) {
   const starsContainer = document.getElementById("stars");
@@ -193,16 +200,114 @@ function askState() {
 }
 
 function askDistrict() {
-  addMessage(`${farmerInfo.state} lo me district peru?`, "bot");
+  addMessage(`${farmerInfo.state}-district: ?`, "bot");
 }
 
 function askCrop() {
-  addMessage("🌱 Ee season lo mee crop enti?", "bot");
+  addMessage("🌱 crop: ", "bot");
 }
 
 function setupComplete() {
   addMessage(
-    `✔ Done! Mee details save chesanu.\nLet's start farming assistance! 😊`,
+    `✔ Done! \nLet's start farming assistance! 😊`,
     "bot"
   );
+}
+// ---- Voice Input ---- //
+const micBtn = document.createElement("button");
+micBtn.innerHTML = "🎙";
+micBtn.classList.add("mic-btn");
+document.querySelector(".input-area").appendChild(micBtn);
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const recognition = new SpeechRecognition();
+recognition.lang = "en-IN";
+recognition.interimResults = false;
+
+micBtn.addEventListener("click", () => {
+  recognition.start();
+  micBtn.style.background = "red";
+});
+
+recognition.onresult = (event) => {
+  const text = event.results[0][0].transcript;
+  userInput.value = text;
+  sendMessage();
+  micBtn.style.background = "";
+};
+
+recognition.onerror = () => {
+  micBtn.style.background = "";
+};
+// Voice recognition setup
+
+function setVoiceLang() {
+  if (farmerInfo.language === "telugu") {
+    recognition.lang = "te-IN";
+  } else {
+    recognition.lang = "en-IN";
+  }
+}
+
+setVoiceLang(); // default before language setup done
+
+recognition.interimResults = false;
+
+micBtn.addEventListener("click", () => {
+  setVoiceLang();
+  recognition.start();
+  micBtn.style.background = "red";
+});
+
+recognition.onresult = (event) => {
+  const text = event.results[0][0].transcript;
+  userInput.value = text;
+  sendMessage();
+  micBtn.style.background = "";
+};
+
+recognition.onerror = () => {
+  micBtn.style.background = "";
+};
+
+
+// ---- Wake Word + Always Listening ---- //
+let listeningAlways = true; // ON all the time
+
+const wakeRecognizer = new SpeechRecognition();
+wakeRecognizer.lang = "en-IN";
+wakeRecognizer.continuous = true;
+wakeRecognizer.interimResults = false;
+
+wakeRecognizer.onresult = (event) => {
+  const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+
+  if (transcript.includes("hey farmer bot")) {
+    speak("Yes, I am listening!", farmerInfo.language);
+    setVoiceLang();
+    recognition.start(); // start recording user message
+  }
+};
+
+wakeRecognizer.start();
+
+// Continuous listening restart
+recognition.onend = () => {
+  if (listeningAlways) {
+    recognition.start();
+  }
+};
+
+
+// ---- Voice Output ---- //
+function speak(text, lang) {
+  const speech = new SpeechSynthesisUtterance(text);
+
+  if (lang === "telugu") speech.lang = "te-IN";
+  else if (lang === "telugu-eng") speech.lang = "en-IN";
+  else speech.lang = "en-US";
+
+  speech.rate = 1; // speed
+  speech.pitch = 1; // tone
+  window.speechSynthesis.speak(speech);
 }

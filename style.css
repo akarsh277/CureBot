@@ -381,3 +381,21 @@ body:hover .bg-shape {
 .dark::-webkit-scrollbar-thumb {
   background: #0084ff;
 }
+.mic-btn {
+  margin-left: 8px;
+  padding: 10px;
+  border-radius: 50%;
+  background: #444;
+  color: #fff;
+  cursor: pointer;
+  border: none;
+  font-size: 18px;
+  transition: 0.3s;
+}
+
+.mic-btn:hover {
+  background: #666;
+}
+.mic-btn:active {
+  background: #222;
+}
