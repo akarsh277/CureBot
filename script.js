@@ -4,11 +4,13 @@ const chatBox = document.getElementById("chat-box");
 const themeToggle = document.getElementById("theme-toggle");
 let setupStep = 0;
 let farmerInfo = {
-  language: null,
-  state: null,
-  district: null,
-  crop: null
+  language: "",
+  state: "",
+  district: "",
+  crop: ""
 };
+
+let setupCompleteFlag = false;
 
 
 function autoScroll() {
@@ -23,6 +25,24 @@ function addMessage(message, sender) {
   chatBox.appendChild(msgDiv);
   autoScroll();
   return msgDiv;
+}
+function showTyping() {
+  const typingDiv = document.createElement("div");
+  typingDiv.classList.add("bot-message", "typing");
+  typingDiv.id = "typing-indicator";
+  typingDiv.innerHTML = `
+    <div class="dot"></div>
+    <div class="dot"></div>
+    <div class="dot"></div>
+  `;
+  chatBox.appendChild(typingDiv);
+  autoScroll();
+  return typingDiv; // IMPORTANT! 🔥
+}
+
+function hideTyping() {
+  const typingIndicator = document.getElementById("typing-indicator");
+  if (typingIndicator) typingIndicator.remove();
 }
 
 // Bot response
@@ -60,46 +80,39 @@ function sendMessage() {
   addMessage(input, "user");
   userInput.value = "";
 
-  // Setup flow
+  // Farmer setup flow
   if (!setupCompleteFlag) {
-    if (setupStep === 0) {
-      // Language selection
-      if (input === "1") farmerInfo.language = "English";
-      else if (input === "2") farmerInfo.language = "Telugu";
-      else if (input === "3") farmerInfo.language = "Eng+Tel";
-      else farmerInfo.language = input; // fallback user typed language
+    switch (setupStep) {
+      case 0:
+        farmerInfo.language = input.toLowerCase();
+        setupStep++;
+        askState();
+        return;
 
-      setupStep++;
-      askState();
-      return;
-    }
+      case 1:
+        farmerInfo.state = input;
+        setupStep++;
+        askDistrict();
+        return;
 
-    if (setupStep === 1) {
-      farmerInfo.state = input;
-      setupStep++;
-      askDistrict();
-      return;
-    }
+      case 2:
+        farmerInfo.district = input;
+        setupStep++;
+        askCrop();
+        return;
 
-    if (setupStep === 2) {
-      farmerInfo.district = input;
-      setupStep++;
-      askCrop();
-      return;
-    }
-
-    if (setupStep === 3) {
-      farmerInfo.crop = input;
-      setupStep = 4;
-      setupComplete();
-      setupCompleteFlag = true;
-      return;
+      case 3:
+        farmerInfo.crop = input;
+        setupStep++;
+        setupComplete();
+        return;
     }
   }
 
-  // Normal chat after setup complete
+  // After setup complete → Chatbot normal mode
   botResponse(input);
 }
+
 
 function createStars(count = 40) {
   const starsContainer = document.getElementById("stars");
