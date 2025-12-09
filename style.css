@@ -369,3 +369,15 @@ body:hover .bg-shape {
 .dark .chat-box::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
 }
+.dark body {
+  background: #0f0f0f;
+}
+
+.dark #stars .star {
+  background: #7af6ff;
+  opacity: 1;
+}
+
+.dark::-webkit-scrollbar-thumb {
+  background: #0084ff;
+}

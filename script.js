@@ -2,6 +2,14 @@ const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
 const themeToggle = document.getElementById("theme-toggle");
+let setupStep = 0;
+let farmerInfo = {
+  language: null,
+  state: null,
+  district: null,
+  crop: null
+};
+
 
 function autoScroll() {
   window.scrollTo(0, document.body.scrollHeight);
@@ -18,22 +26,22 @@ function addMessage(message, sender) {
 }
 
 // Bot response
-async function botResponse(userMsg) {
-  const typingDiv = document.createElement("div");
-  typingDiv.classList.add("bot-message", "typing");
-  typingDiv.innerHTML = `
-    <div class="dot"></div>
-    <div class="dot"></div>
-    <div class="dot"></div>
-  `;
-  chatBox.appendChild(typingDiv);
-  autoScroll();
+async function botResponse(message) {
+  const typingDiv = showTyping();
+
+  const payload = {
+    message,
+    language: farmerInfo.language,
+    state: farmerInfo.state,
+    district: farmerInfo.district,
+    crop: farmerInfo.crop
+  };
 
   try {
     const res = await fetch("http://127.0.0.1:5000/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: userMsg }),
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
@@ -42,8 +50,55 @@ async function botResponse(userMsg) {
 
   } catch (err) {
     typingDiv.remove();
-    addMessage("⚠️ Backend connection failed!", "bot");
+    addMessage("⚠️ Something went wrong!", "bot");
   }
+}
+function sendMessage() {
+  const input = userInput.value.trim();
+  if (!input) return;
+
+  addMessage(input, "user");
+  userInput.value = "";
+
+  // Setup flow
+  if (!setupCompleteFlag) {
+    if (setupStep === 0) {
+      // Language selection
+      if (input === "1") farmerInfo.language = "English";
+      else if (input === "2") farmerInfo.language = "Telugu";
+      else if (input === "3") farmerInfo.language = "Eng+Tel";
+      else farmerInfo.language = input; // fallback user typed language
+
+      setupStep++;
+      askState();
+      return;
+    }
+
+    if (setupStep === 1) {
+      farmerInfo.state = input;
+      setupStep++;
+      askDistrict();
+      return;
+    }
+
+    if (setupStep === 2) {
+      farmerInfo.district = input;
+      setupStep++;
+      askCrop();
+      return;
+    }
+
+    if (setupStep === 3) {
+      farmerInfo.crop = input;
+      setupStep = 4;
+      setupComplete();
+      setupCompleteFlag = true;
+      return;
+    }
+  }
+
+  // Normal chat after setup complete
+  botResponse(input);
 }
 
 function createStars(count = 40) {
@@ -62,13 +117,7 @@ function createStars(count = 40) {
 }
 createStars(50);
 // Send button
-sendBtn.addEventListener("click", () => {
-  const text = userInput.value.trim();
-  if (!text) return;
-  addMessage(text, "user");
-  userInput.value = "";
-  botResponse(text);
-});
+sendBtn.addEventListener("click", sendMessage);
 
 // Enter key
 userInput.addEventListener("keypress", (e) => {
@@ -92,8 +141,10 @@ window.onload = () => {
   else if (hour <= 15) greet = "Good Afternoon ☀️";
   else greet = "Good Evening 🌙";
 
-  addMessage(greet + " How can I assist you?", "bot");
+  addMessage(`${greet} Welcome to Smart Farmer Bot 🚜`, "bot");
+  setTimeout(askLanguage, 1000);
 };
+
 autoScroll();
 document.addEventListener("mousemove", (e) => {
   const x = e.clientX / window.innerWidth - 0.5;
@@ -112,3 +163,22 @@ document.addEventListener("mousemove", (e) => {
         star.style.transform = `translate(${x}px, ${y}px)`;
     });
 });
+function askLanguage() {
+  addMessage("🌐 Please select your language:\n1️⃣ English\n2️⃣ Telugu\n3️⃣ Telugu in English (Eng+Tel)", "bot");
+}
+
+function askState() {
+  addMessage("📍 Your State name?", "bot");
+}
+
+function askDistrict() {
+  addMessage(`${farmerInfo.state} lo me district peru?`, "bot");
+}
+
+function askCrop() {
+  addMessage("🌱 Ee season lo mee crop enti?", "bot");
+}
+
+function setupComplete() {
+  addMessage(`✔ Done! Mee details save chesanu.\nLet's start farming assistance! 😊`, "bot");
+}
