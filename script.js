@@ -371,3 +371,66 @@ try {
 } catch (e) {
   console.warn("Wake word not supported in this browser", e);
 }
+/* -------- AgriPulse UI helpers (leaves + particles + logo pulse) -------- */
+
+// Ensure app-title exists before running
+function initAgriPulseUI() {
+  // 1) ensure title element - if missing, create it
+  let title = document.querySelector(".app-title");
+  if (!title) {
+    title = document.createElement("div");
+    title.className = "app-title";
+    title.innerHTML = `<div class="logo-badge">🌱</div><div class="title-text">AgriPulse</div>`;
+    document.body.prepend(title);
+  }
+
+  // pulse the badge gently
+  title.classList.add("pulse");
+
+  // 2) create leaves layer
+  const leafLayer = document.getElementById("leaf-layer") || (() => {
+    const el = document.createElement("div");
+    el.id = "leaf-layer";
+    document.body.appendChild(el);
+    return el;
+  })();
+
+  // create N leaves with random positions
+  function createLeaves(n=8) {
+    leafLayer.innerHTML = "";
+    for (let i=0;i<n;i++){
+      const L = document.createElement("div");
+      L.className = "leaf";
+      const left = Math.random() * 100;
+      const top = Math.random() * 45 + 5; // keep upper area
+      L.style.left = left + "vw";
+      L.style.top = top + "vh";
+      L.style.opacity = 0.75 + Math.random()*0.25;
+      L.style.transform = `rotate(${Math.random()*360}deg) scale(${0.8 + Math.random()*0.6})`;
+      L.style.animationDuration = (8 + Math.random()*6) + "s";
+      L.style.animationDelay = (-Math.random()*8) + "s";
+      leafLayer.appendChild(L);
+    }
+  }
+  createLeaves(9);
+
+  // 3) particle stars already created elsewhere; add small parallax on mouse
+  document.addEventListener("mousemove", (e) => {
+    const cx = (e.clientX / window.innerWidth - 0.5);
+    const cy = (e.clientY / window.innerHeight - 0.5);
+    // move leaves subtly
+    document.querySelectorAll(".leaf").forEach((el, i) => {
+      const s = (i+1) * 6;
+      el.style.transform = `translate(${cx * s}px, ${cy * s}px) rotate(${(i*22) + cx*20}deg) scale(${0.85 + (i%3)*0.08})`;
+    });
+    // title parallax
+    const title = document.querySelector(".app-title");
+    if (title) title.style.transform = `translateX(-50%) translateY(${cy*6}px)`;
+  });
+
+  // small responsiveness: recreate leaves on resize
+  window.addEventListener("resize", () => { createLeaves(9); });
+}
+
+// call it (safe)
+try { initAgriPulseUI(); } catch(e){ console.warn("AgriPulse UI init failed:", e); }

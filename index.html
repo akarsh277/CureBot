@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatBot</title>
+  <title>AgriPulse ChatBot</title>
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
@@ -12,14 +12,25 @@
 </head>
 
 <body>
+  <div class="app-title">AgriPulse 🌱</div>
+
+  <!-- 🌾 AgriPulse Header -->
+  <header class="app-header">
+  <img src="assets/logo.jpg" alt="AgriPulse Logo" class="app-logo">
+    <button id="theme-toggle">🌙</button>
+  </header>
+
   <!-- Background shapes -->
   <div class="bg-shape shape1"></div>
   <div class="bg-shape shape2"></div>
   <div class="bg-shape shape3"></div>
-  <div id="stars"></div>
 
-  <!-- Dark Mode Toggle -->
-  <button id="theme-toggle">🌙</button>
+  <!-- Stars & Leaves -->
+  <div id="stars"></div>
+  <div id="leaf-layer"></div>
+
+  <!-- Grass Layer -->
+  <div class="body-grass"></div>
 
   <!-- Chat UI -->
   <div class="chat-container">
