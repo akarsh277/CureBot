@@ -2,6 +2,8 @@ const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
 const themeToggle = document.getElementById("theme-toggle");
+const micBtn = document.getElementById("mic-btn");
+let voiceMode = false;
 
 let setupStep = 0;
 let farmerInfo = {
@@ -16,21 +18,24 @@ let setupCompleteFlag = false;
 function autoScroll() {
   chatBox.scrollTo({
     top: chatBox.scrollHeight,
-    behavior: "smooth"
+    behavior: "smooth",
   });
 }
-
 
 // Add message
 function addMessage(message, sender) {
   const msgDiv = document.createElement("div");
   msgDiv.classList.add(sender === "user" ? "user-message" : "bot-message");
+  // support HTML safe small tags if needed (we're using textContent for safety)
   msgDiv.textContent = message;
   chatBox.appendChild(msgDiv);
   autoScroll();
   return msgDiv;
 }
+
 function showTyping() {
+  // remove previous typing if any
+  hideTyping();
   const typingDiv = document.createElement("div");
   typingDiv.classList.add("bot-message", "typing");
   typingDiv.id = "typing-indicator";
@@ -41,7 +46,7 @@ function showTyping() {
   `;
   chatBox.appendChild(typingDiv);
   autoScroll();
-  return typingDiv; // IMPORTANT! 🔥
+  return typingDiv;
 }
 
 function hideTyping() {
@@ -49,29 +54,79 @@ function hideTyping() {
   if (typingIndicator) typingIndicator.remove();
 }
 
-// Bot response
-// --- WebSocket Setup ---
-let ws = new WebSocket("ws://127.0.0.1:5000/ws");
+// --- WebSocket Setup (robust with reconnect) ---
+let ws = null;
+let wsReconnectTimer = null;
 
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
+function initWebSocket() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
-  if (data.sender === "bot") {
-    addMessage(data.message, "bot");
-    speak(data.message, farmerInfo.language);
+  ws = new WebSocket("ws://127.0.0.1:5000/ws");
+
+  ws.onopen = () => {
+    console.log("WS CONNECTED 🔗");
+    // Clear any reconnect timer
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.sender === "bot") {
+        hideTyping();
+        addMessage(data.message, "bot");
+        if (voiceMode) {
+          speak(data.message);
+        }
+      }
+    } catch (e) {
+      console.error("WS message parse error", e);
+    }
+  };
+
+  ws.onclose = (ev) => {
+    console.warn("WS closed. Reconnecting...", ev);
+    hideTyping();
+    // attempt reconnect with small backoff
+    if (!wsReconnectTimer) {
+      wsReconnectTimer = setTimeout(() => {
+        initWebSocket();
+      }, 2000);
+    }
+  };
+
+  ws.onerror = (err) => {
+    console.error("WS error", err);
+    try { ws.close(); } catch (e) {}
+  };
+}
+
+// initialize websocket immediately
+initWebSocket();
+
+// Safe send helper
+function safeWSSend(obj) {
+  try {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // try reinit and notify user
+      initWebSocket();
+      addMessage("⚠️ Connecting to backend, try again in a moment.", "bot");
+      return false;
+    }
+    ws.send(JSON.stringify(obj));
+    return true;
+  } catch (e) {
+    console.error("WS send failed", e);
+    return false;
   }
-};
-
-// Handle socket close and reconnect automatically
-ws.onclose = () => {
-  setTimeout(() => {
-    ws = new WebSocket("ws://127.0.0.1:5000/ws");
-  }, 2000);
-};
-
+}
 
 // --- Send Message ---
 function sendMessage() {
+  voiceMode = false; // typing → no voice output
   const input = userInput.value.trim();
   if (!input) return;
 
@@ -112,21 +167,30 @@ function sendMessage() {
   }
 
   // After basic setup → send message to WebSocket backend
-  ws.send(JSON.stringify({
+  // show typing indicator while waiting for response
+  showTyping();
+
+  const payload = {
     message: input,
     language: farmerInfo.language,
     state: farmerInfo.state,
     district: farmerInfo.district,
-    crop: farmerInfo.crop
-  }));
-  
+    crop: farmerInfo.crop,
+  };
+
+  const sent = safeWSSend(payload);
+  if (!sent) {
+    hideTyping();
+    addMessage("⚠️ Could not send message to backend.", "bot");
+  }
+
   autoScroll();
 }
 
-// Starfield effect 
-
+// Starfield effect
 function createStars(count = 40) {
   const starsContainer = document.getElementById("stars");
+  if (!starsContainer) return;
   for (let i = 0; i < count; i++) {
     const star = document.createElement("div");
     star.classList.add("star");
@@ -140,6 +204,7 @@ function createStars(count = 40) {
   }
 }
 createStars(50);
+
 // Send button
 sendBtn.addEventListener("click", sendMessage);
 
@@ -170,6 +235,8 @@ window.onload = () => {
 };
 
 autoScroll();
+
+// Parallax background shapes
 document.addEventListener("mousemove", (e) => {
   const x = e.clientX / window.innerWidth - 0.5;
   const y = e.clientY / window.innerHeight - 0.5;
@@ -179,6 +246,8 @@ document.addEventListener("mousemove", (e) => {
     shape.style.transform = `translate(${x * speed}px, ${y * speed}px)`;
   });
 });
+
+// Star movement on mouse
 document.addEventListener("mousemove", (e) => {
   document.querySelectorAll(".star").forEach((star) => {
     let speed = 0.02;
@@ -187,6 +256,7 @@ document.addEventListener("mousemove", (e) => {
     star.style.transform = `translate(${x}px, ${y}px)`;
   });
 });
+
 function askLanguage() {
   addMessage(
     "🌐 Please select your language:\n1️⃣ English\n2️⃣ Telugu\n3️⃣ Telugu in English (Eng+Tel)",
@@ -207,15 +277,13 @@ function askCrop() {
 }
 
 function setupComplete() {
-  addMessage(
-    `✔ Done! \nLet's start farming assistance! 😊`,
-    "bot"
-  );
+  setupCompleteFlag = true;
+  addMessage(`✔ Done! \nLet's start farming assistance! 😊`, "bot");
 }
-// ---- Voice Input ---- //
-const micBtn = document.getElementById("mic-btn");
 
-const speechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+// ---- Voice Input ---- //
+const speechRecognition =
+  window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = new speechRecognition();
 recognition.continuous = false;
 recognition.interimResults = false;
@@ -234,9 +302,10 @@ updateVoiceLang();
 
 // Mic click → start listening
 micBtn.addEventListener("click", () => {
-  updateVoiceLang();
+  voiceMode = true; // enable voice output only for this message
+  updateVoiceLang(); // fixed function name
   recognition.start();
-  micBtn.style.background = "#ff4545";
+  micBtn.style.background = "red";
 });
 
 recognition.onresult = (event) => {
@@ -250,25 +319,55 @@ recognition.onerror = () => {
   micBtn.style.background = "";
 };
 
-// Voice Output
-function speak(text) {
-  const utter = new SpeechSynthesisUtterance(text);
-  updateVoiceLang();
-  utter.lang = recognition.lang;
-  speechSynthesis.speak(utter);
-}
-
-// Wake Word listener (not continuous)
-let wakeRecognition = new speechRecognition();
-wakeRecognition.lang = "en-IN";
-wakeRecognition.continuous = true;
-
-wakeRecognition.onresult = (event) => {
-  const cmd = event.results[event.results.length - 1][0].transcript.toLowerCase();
-  if (cmd.includes("hey farmer bot")) {
-    speak("Yes, I'm listening!");
-    recognition.start(); 
-  }
+recognition.onend = () => {
+  // ensure mic UI resets
+  micBtn.style.background = "";
 };
 
-wakeRecognition.start();
+// Voice Output
+function speak(text) {
+  // if user did NOT use voice input → NO SPEAK
+  if (!voiceMode) return;
+
+  const utter = new SpeechSynthesisUtterance(text);
+
+  updateVoiceLang();
+  utter.lang = recognition.lang;
+
+  speechSynthesis.speak(utter);
+
+  // disable voice after speaking once
+  voiceMode = false;
+}
+
+// Wake Word listener (optional)
+let wakeRecognition;
+try {
+  wakeRecognition = new speechRecognition();
+  wakeRecognition.lang = "en-IN";
+  wakeRecognition.continuous = true;
+
+  wakeRecognition.onresult = (event) => {
+    const cmd =
+      event.results[event.results.length - 1][0].transcript.toLowerCase();
+    if (cmd.includes("hey farmer bot")) {
+      // give small audible ack only if user used voice
+      voiceMode = true;
+      speak("Yes, I'm listening!");
+      recognition.start();
+    }
+  };
+
+  wakeRecognition.onend = () => {
+    // keep wake listener alive
+    try {
+      wakeRecognition.start();
+    } catch (e) {
+      // ignore if user blocked or not supported
+    }
+  };
+
+  wakeRecognition.start();
+} catch (e) {
+  console.warn("Wake word not supported in this browser", e);
+}

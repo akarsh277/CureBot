@@ -402,3 +402,8 @@ body:hover .bg-shape {
 .dark #mic-btn:hover {
   background-color: #444;
 }
+#mic-btn.listening {
+  background-color: #ff4b5c;
+  color: white;
+  animation: pulse 1.5s infinite;
+}
