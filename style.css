@@ -381,21 +381,24 @@ body:hover .bg-shape {
 .dark::-webkit-scrollbar-thumb {
   background: #0084ff;
 }
-.mic-btn {
-  margin-left: 8px;
-  padding: 10px;
-  border-radius: 50%;
-  background: #444;
-  color: #fff;
-  cursor: pointer;
+#mic-btn {
+  background-color: #eee;
   border: none;
   font-size: 18px;
-  transition: 0.3s;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-radius: 10px 0 0 10px;
+  transition: 0.2s;
 }
 
-.mic-btn:hover {
-  background: #666;
+#mic-btn:hover {
+  background-color: #ddd;
 }
-.mic-btn:active {
-  background: #222;
+
+.dark #mic-btn {
+  background: #333;
+  color: white;
+}
+.dark #mic-btn:hover {
+  background-color: #444;
 }

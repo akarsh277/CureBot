@@ -2,6 +2,7 @@ const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
 const themeToggle = document.getElementById("theme-toggle");
+
 let setupStep = 0;
 let farmerInfo = {
   language: "",
@@ -49,33 +50,27 @@ function hideTyping() {
 }
 
 // Bot response
-async function botResponse(message) {
-  const typingDiv = showTyping();
+// --- WebSocket Setup ---
+let ws = new WebSocket("ws://127.0.0.1:5000/ws");
 
-  const payload = {
-    message,
-    language: farmerInfo.language,
-    state: farmerInfo.state,
-    district: farmerInfo.district,
-    crop: farmerInfo.crop,
-  };
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
 
-  try {
-    const res = await fetch("http://127.0.0.1:5000/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json();
-    typingDiv.remove();
-    addMessage(data.response, "bot");
-    speak(data.response, farmerInfo.language);
-  } catch (err) {
-    typingDiv.remove();
-    addMessage("⚠️ Something went wrong!", "bot");
+  if (data.sender === "bot") {
+    addMessage(data.message, "bot");
+    speak(data.message, farmerInfo.language);
   }
-}
+};
+
+// Handle socket close and reconnect automatically
+ws.onclose = () => {
+  setTimeout(() => {
+    ws = new WebSocket("ws://127.0.0.1:5000/ws");
+  }, 2000);
+};
+
+
+// --- Send Message ---
 function sendMessage() {
   const input = userInput.value.trim();
   if (!input) return;
@@ -83,19 +78,15 @@ function sendMessage() {
   addMessage(input, "user");
   userInput.value = "";
 
-  // Farmer setup flow
+  // Setup process first
   if (!setupCompleteFlag) {
     switch (setupStep) {
       case 0:
-        if (input === "1") {
-          farmerInfo.language = "english";
-        } else if (input === "2") {
-          farmerInfo.language = "telugu";
-        } else if (input === "3") {
-          farmerInfo.language = "telugu-eng";
-        } else {
-          farmerInfo.language = "english";
-        }
+        if (input === "1") farmerInfo.language = "english";
+        else if (input === "2") farmerInfo.language = "telugu";
+        else if (input === "3") farmerInfo.language = "telugu-eng";
+        else farmerInfo.language = "english";
+
         setupStep++;
         askState();
         return;
@@ -120,10 +111,18 @@ function sendMessage() {
     }
   }
 
-  // After setup complete → Chatbot normal mode
-  botResponse(input);
+  // After basic setup → send message to WebSocket backend
+  ws.send(JSON.stringify({
+    message: input,
+    language: farmerInfo.language,
+    state: farmerInfo.state,
+    district: farmerInfo.district,
+    crop: farmerInfo.crop
+  }));
+  
+  autoScroll();
 }
-autoScroll();
+
 // Starfield effect 
 
 function createStars(count = 40) {
@@ -214,54 +213,35 @@ function setupComplete() {
   );
 }
 // ---- Voice Input ---- //
-const micBtn = document.createElement("button");
-micBtn.innerHTML = "🎙";
-micBtn.classList.add("mic-btn");
-document.querySelector(".input-area").appendChild(micBtn);
+const micBtn = document.getElementById("mic-btn");
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = new SpeechRecognition();
-recognition.lang = "en-IN";
+const speechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = new speechRecognition();
+recognition.continuous = false;
 recognition.interimResults = false;
 
-micBtn.addEventListener("click", () => {
-  recognition.start();
-  micBtn.style.background = "red";
-});
-
-recognition.onresult = (event) => {
-  const text = event.results[0][0].transcript;
-  userInput.value = text;
-  sendMessage();
-  micBtn.style.background = "";
-};
-
-recognition.onerror = () => {
-  micBtn.style.background = "";
-};
-// Voice recognition setup
-
-function setVoiceLang() {
+// Set language dynamically
+function updateVoiceLang() {
   if (farmerInfo.language === "telugu") {
     recognition.lang = "te-IN";
-  } else {
+  } else if (farmerInfo.language === "telugu-eng") {
     recognition.lang = "en-IN";
+  } else {
+    recognition.lang = "en-US";
   }
 }
+updateVoiceLang();
 
-setVoiceLang(); // default before language setup done
-
-recognition.interimResults = false;
-
+// Mic click → start listening
 micBtn.addEventListener("click", () => {
-  setVoiceLang();
+  updateVoiceLang();
   recognition.start();
-  micBtn.style.background = "red";
+  micBtn.style.background = "#ff4545";
 });
 
 recognition.onresult = (event) => {
-  const text = event.results[0][0].transcript;
-  userInput.value = text;
+  const spoken = event.results[0][0].transcript;
+  userInput.value = spoken;
   sendMessage();
   micBtn.style.background = "";
 };
@@ -270,44 +250,25 @@ recognition.onerror = () => {
   micBtn.style.background = "";
 };
 
-
-// ---- Wake Word + Always Listening ---- //
-let listeningAlways = true; // ON all the time
-
-const wakeRecognizer = new SpeechRecognition();
-wakeRecognizer.lang = "en-IN";
-wakeRecognizer.continuous = true;
-wakeRecognizer.interimResults = false;
-
-wakeRecognizer.onresult = (event) => {
-  const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
-
-  if (transcript.includes("hey farmer bot")) {
-    speak("Yes, I am listening!", farmerInfo.language);
-    setVoiceLang();
-    recognition.start(); // start recording user message
-  }
-};
-
-wakeRecognizer.start();
-
-// Continuous listening restart
-recognition.onend = () => {
-  if (listeningAlways) {
-    recognition.start();
-  }
-};
-
-
-// ---- Voice Output ---- //
-function speak(text, lang) {
-  const speech = new SpeechSynthesisUtterance(text);
-
-  if (lang === "telugu") speech.lang = "te-IN";
-  else if (lang === "telugu-eng") speech.lang = "en-IN";
-  else speech.lang = "en-US";
-
-  speech.rate = 1; // speed
-  speech.pitch = 1; // tone
-  window.speechSynthesis.speak(speech);
+// Voice Output
+function speak(text) {
+  const utter = new SpeechSynthesisUtterance(text);
+  updateVoiceLang();
+  utter.lang = recognition.lang;
+  speechSynthesis.speak(utter);
 }
+
+// Wake Word listener (not continuous)
+let wakeRecognition = new speechRecognition();
+wakeRecognition.lang = "en-IN";
+wakeRecognition.continuous = true;
+
+wakeRecognition.onresult = (event) => {
+  const cmd = event.results[event.results.length - 1][0].transcript.toLowerCase();
+  if (cmd.includes("hey farmer bot")) {
+    speak("Yes, I'm listening!");
+    recognition.start(); 
+  }
+};
+
+wakeRecognition.start();

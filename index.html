@@ -3,24 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ChatBot </title>
+  <title>ChatBot</title>
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
-<div class="bg-shape shape1"></div>
-<div class="bg-shape shape2"></div>
-<div class="bg-shape shape3"></div>
-<div id="stars"></div>
+
 <body>
+  <!-- Background shapes -->
+  <div class="bg-shape shape1"></div>
+  <div class="bg-shape shape2"></div>
+  <div class="bg-shape shape3"></div>
+  <div id="stars"></div>
+
+  <!-- Dark Mode Toggle -->
   <button id="theme-toggle">🌙</button>
 
+  <!-- Chat UI -->
   <div class="chat-container">
     <div id="chat-box" class="chat-box"></div>
 
     <div class="input-area">
       <input type="text" id="user-input" placeholder="Type your message..." />
+      <button id="mic-btn">🎤</button>
       <button id="send-btn">Send</button>
     </div>
   </div>
