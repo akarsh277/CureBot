@@ -1,46 +1,75 @@
-// CureBot frontend (replace script.js)
+// CureBot frontend — Patched script.js (fade animations + initial voice language-detect + mic-on-click voice)
 
+// Get DOM elements
 const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
-const themeToggle = document.getElementById("theme-toggle");
 const micBtn = document.getElementById("mic-btn");
 
-let voiceMode = false;
+let voiceMode = false;                // true when mic-button initiated for that exchange
 let setupStep = 0;
 let profile = { language: "english", age: "", gender: "", symptoms: "" };
 let setupCompleteFlag = false;
+let initialLangAutoListen = true;     // we'll auto-listen once for initial language prompt
 
 function autoScroll() {
   chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
 }
 
-function addMessage(message, sender) {
+/**
+ * addMessage(message, sender)
+ * - Adds message element
+ * - Adds fade-in animation class and removes it after completion for cleanliness
+ * - For bot: always adds 'bot-msg' to enable avatar
+ */
+function addMessage(message, sender, noAvatar = false) {
   const msgDiv = document.createElement("div");
-  msgDiv.classList.add(sender === "user" ? "user-message" : "bot-message");
-  msgDiv.textContent = message;
+
+  // USER
+  if (sender === "user") {
+    msgDiv.classList.add("user-message", "fade-in");
+  }
+  // BOT
+  else {
+    msgDiv.classList.add("bot-message", "fade-in");
+    if (!noAvatar) msgDiv.classList.add("bot-msg"); // avatar ON
+  }
+
+  // FIX #1 → Proper multi-line + markdown-like formatting
+  msgDiv.innerHTML = message
+    .replace(/\n/g, "<br>"); // supports multiple lines properly
+
   chatBox.appendChild(msgDiv);
-  autoScroll();
+
+  // FIX #2 → Animation only after DOM insert
+  requestAnimationFrame(() => {
+    msgDiv.style.opacity = "1";
+    msgDiv.style.transform = "translateY(0)";
+  });
+
+  // FIX #3 → Auto-scroll after bubble expands
+  setTimeout(() => autoScroll(), 30);
+
   return msgDiv;
 }
 
+/* Typing loader (ring) */
 function showTyping() {
   hideTyping();
   const typingDiv = document.createElement("div");
-  typingDiv.classList.add("bot-message", "typing");
+  typingDiv.classList.add("typing");
   typingDiv.id = "typing-indicator";
-  typingDiv.innerHTML = `<div class="dot"></div><div class="dot"></div><div class="dot"></div>`;
   chatBox.appendChild(typingDiv);
   autoScroll();
   return typingDiv;
 }
 
 function hideTyping() {
-  const typingIndicator = document.getElementById("typing-indicator");
-  if (typingIndicator) typingIndicator.remove();
+  const el = document.getElementById("typing-indicator");
+  if (el) el.remove();
 }
 
-// WebSocket
+// ---------- WebSocket ----------
 let ws = null;
 let wsReconnectTimer = null;
 function initWebSocket() {
@@ -55,12 +84,18 @@ function initWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.sender === "bot") {
-        hideTyping();
-        addMessage(data.message, "bot");
-        if (voiceMode) speak(data.message);
+      hideTyping();
+
+      // Display bot reply (avatar shown)
+      addMessage(data.message, "bot");
+
+      // Speak only if voiceMode is active (i.e., mic clicked for this exchange)
+      if (voiceMode) {
+        try { speak(data.message); } catch (e) { console.error("TTS error", e); }
       }
-    } catch (e) { console.error("WS message parse error", e); }
+    } catch (e) {
+      console.error("WS parse error", e);
+    }
   };
 
   ws.onclose = (ev) => {
@@ -93,12 +128,12 @@ function safeWSSend(obj) {
   }
 }
 
-// Setup prompts translations
+// ---------- Prompts ----------
 const Q = {
   language: {
-    english: "🌐 Choose language:\n1️⃣ English\n2️⃣ Telugu\n3️⃣ Hindi",
-    telugu: "🌐 భాషను ఎంచుకోండి:\n1️⃣ English\n2️⃣ తెలుగు\n3️⃣ हिन्दी",
-    hindi: "🌐 भाषा चुनें:\n1️⃣ English\n2️⃣ తెలుగు\n3️⃣ हिन्दी"
+    english: "🌐 Please choose a language: 1. English /2. Telugu /3. Hindi",
+    telugu: "🌐 దయచేసి భాషను ఎంచుకోండి: 1. English /2. Telugu /3. Hindi",
+    hindi: "🌐 कृपया भाषा चुनें: 1. English /2. Telugu /3. Hindi"
   },
   askAge: {
     english: "🧾 What is your age?",
@@ -117,23 +152,94 @@ const Q = {
   }
 };
 
-// greeting and initial flow
+// ---------- Speech setup ----------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+try {
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+  }
+} catch (e) {
+  recognition = null;
+}
+
+function detectLanguageFromText(text) {
+  if (!text || typeof text !== "string") return "english";
+  const s = text.trim().toLowerCase();
+
+  // Telugu keywords (romanised and native)
+  const teluguKw = ["ardham", "kaaledu", "kaledu", "telugu", "ledhu", "ledu", "artham"];
+  for (let k of teluguKw) if (s.includes(k)) return "telugu";
+
+  // Hindi keywords
+  const hindiKw = ["pata", "patha", "nahi", "samaj", "samajh"];
+  for (let k of hindiKw) if (s.includes(k)) return "hindi";
+
+  // Unicode detection fallback
+  if (/[ \u0C00-\u0C7F]+/.test(s)) return "telugu";
+  if (/[ \u0900-\u097F]+/.test(s)) return "hindi";
+
+  return "english";
+}
+
+function updateRecognitionLangFor(lang) {
+  if (!recognition) return;
+  if (lang === "telugu") recognition.lang = "te-IN";
+  else if (lang === "hindi") recognition.lang = "hi-IN";
+  else recognition.lang = "en-US";
+}
+
+// TTS speaking (used for prompts and replies when mic is used)
+function speak(text) {
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    if (profile.language === "telugu") utter.lang = "te-IN";
+    else if (profile.language === "hindi") utter.lang = "hi-IN";
+    else utter.lang = "en-US";
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utter);
+  } catch (e) {
+    console.error("TTS error", e);
+  }
+}
+
+// ---------- UI flow with initial voice ask ----------
 window.onload = () => {
   const hour = new Date().getHours();
   let greet = "Hello!";
   if (hour < 12) greet = "Good Morning 🌞";
   else if (hour <= 15) greet = "Good Afternoon ☀️";
   else greet = "Good Evening 🌙";
+
   addMessage(`${greet} Welcome to CureBot 🩺 — I will ask a few quick questions to help you better.`, "bot");
-  setTimeout(() => askLanguage(), 900);
+
+  // ask language with voice and auto-listen once
+  setTimeout(() => {
+    askLanguage(true); // autoListen = true for initial language prompt
+  }, 900);
 };
 
-function askLanguage() {
+function askLanguage(autoListen = false) {
   setupStep = 0;
   showTyping();
   setTimeout(() => {
     hideTyping();
-    addMessage(Q.language.english, "bot");
+    const text = Q.language.english;
+    addMessage(text, "bot");
+    // speak the language prompt
+    try { speak(text); } catch (e) {}
+    if (autoListen && recognition) {
+      // prepare recognition to capture user response (broad capture)
+      recognition.lang = "en-US"; // accept romanized responses as well
+      try {
+        recognition.start();
+        // We'll use onresult to process reply for setupStep === 0
+      } catch (e) {
+        console.warn("recognition start failed", e);
+      }
+    }
   }, 600);
 }
 
@@ -143,6 +249,7 @@ function askAge() {
     hideTyping();
     const text = Q.askAge[profile.language] || Q.askAge.english;
     addMessage(text, "bot");
+    speak(text);
   }, 400);
 }
 
@@ -151,9 +258,8 @@ function askGender() {
   setTimeout(() => {
     hideTyping();
     const text = Q.askGender[profile.language] || Q.askGender.english;
-    // show as bot message
     addMessage(text, "bot");
-    // also show simple clickable choices for demo
+    speak(text);
     showGenderButtons();
   }, 400);
 }
@@ -164,13 +270,13 @@ function askSymptoms() {
     hideTyping();
     const text = Q.askSymptoms[profile.language] || Q.askSymptoms.english;
     addMessage(text, "bot");
+    speak(text);
   }, 400);
 }
 
 function showGenderButtons() {
-  // temporary UI: small inline buttons inside chat
   const wrapper = document.createElement("div");
-  wrapper.className = "bot-message";
+  wrapper.className = "bot-message bot-system";
   wrapper.style.paddingLeft = "14px";
   wrapper.style.display = "flex";
   wrapper.style.gap = "8px";
@@ -215,7 +321,7 @@ function proceedAfterGender() {
   autoScroll();
 }
 
-// send message handler
+// ---------- message send handler ----------
 function sendMessage() {
   voiceMode = false;
   const input = userInput.value.trim();
@@ -223,7 +329,7 @@ function sendMessage() {
   addMessage(input, "user");
   userInput.value = "";
 
-  // Setup flow (step-based)
+  // Setup flow (if not complete)
   if (!setupCompleteFlag) {
     switch (setupStep) {
       case 0:
@@ -231,16 +337,18 @@ function sendMessage() {
         if (input === "1" || /english/i.test(input)) profile.language = "english";
         else if (input === "2" || /telugu/i.test(input) || /తెలుగు/.test(input)) profile.language = "telugu";
         else if (input === "3" || /hindi/i.test(input) || /हिन्दी|हिंदी/.test(input)) profile.language = "hindi";
-        else profile.language = "english";
+        else profile.language = detectLanguageFromText(input) || "english";
 
         setupStep = 1;
-        return askAge();
+        askAge();
+        return;
 
       case 1:
         // age typed
         profile.age = input;
         setupStep = 2;
-        return askGender();
+        askGender();
+        return;
 
       case 2:
         // gender typed fallback (if user typed instead of buttons)
@@ -248,7 +356,8 @@ function sendMessage() {
         else if (/female/i.test(input)) profile.gender = "Female";
         else profile.gender = input;
         setupStep = 3;
-        return askSymptoms();
+        askSymptoms();
+        return;
 
       case 3:
         // symptoms typed
@@ -261,7 +370,6 @@ function sendMessage() {
 
   // After setup → send payload to backend
   showTyping();
-
   const payload = {
     message: input,
     language: profile.language,
@@ -280,92 +388,167 @@ function sendMessage() {
 
 function setupComplete() {
   setupCompleteFlag = true;
-  addMessage("✔ Setup complete! I will respond in your chosen language. How can I help you today?", "bot");
+  addMessage("✔ Setup complete! I will respond in your chosen language.", "bot");
+
+  // Immediately request medical suggestion from backend (text only)
+  showTyping();
+  const payload = {
+    message: profile.symptoms,
+    language: profile.language,
+    age: profile.age,
+    gender: profile.gender,
+    symptoms: profile.symptoms,
+    setup: true
+  };
+  const sent = safeWSSend(payload);
+  if (!sent) {
+    hideTyping();
+    addMessage("⚠️ Could not send symptoms to backend.", "bot");
+  }
 }
 
-// Events
-sendBtn.addEventListener("click", sendMessage);
-userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendBtn.click(); });
+// ---------- Mic button: voice input only on click ----------
+function startMicForUserInput() {
+  if (!recognition) {
+    addMessage("Voice input is not supported in this browser.", "bot");
+    return;
+  }
 
-// Theme toggle
-themeToggle.addEventListener("click", () => {
-  document.body.classList.toggle("dark");
-  themeToggle.textContent = document.body.classList.contains("dark") ? "☀️" : "🌙";
-});
-
-// Voice recognition (basic)
-const speechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-try {
-  recognition = new (speechRecognition)();
-  recognition.continuous = false;
-  recognition.interimResults = false;
-} catch (e) {
-  recognition = null;
+  // enable voiceMode for this exchange so replies are spoken too
+  voiceMode = true;
+  // set recognition language to user's chosen language
+  updateRecognitionLangFor(profile.language);
+  try {
+    recognition.start();
+    micBtn.style.background = "red";
+  } catch (e) {
+    console.warn("recognition start error", e);
+    micBtn.style.background = "";
+    voiceMode = false;
+  }
 }
 
-function updateVoiceLang() {
+// update recognition language
+function updateRecognitionLangFor(lang) {
   if (!recognition) return;
-  if (profile.language === "telugu") recognition.lang = "te-IN";
-  else if (profile.language === "hindi") recognition.lang = "hi-IN";
+  if (lang === "telugu") recognition.lang = "te-IN";
+  else if (lang === "hindi") recognition.lang = "hi-IN";
   else recognition.lang = "en-US";
 }
 
+// Recognition events
 if (recognition) {
-  micBtn.addEventListener("click", () => {
-    voiceMode = true;
-    updateVoiceLang();
-    try { recognition.start(); micBtn.style.background = "red"; } catch (e) {}
-  });
-
   recognition.onresult = (event) => {
-    const spoken = event.results[0][0].transcript;
+    const spoken = event.results[0][0].transcript.trim();
+    // If we're still in setup language step (initial auto-listen)
+    if (!setupCompleteFlag && setupStep === 0 && initialLangAutoListen) {
+      addMessage(spoken, "user");
+      // detect keywords to decide language
+      const det = detectLanguageFromText(spoken);
+      profile.language = det;
+      updateRecognitionLangFor(det);
+      // provide short confirmation
+      addMessage(`Language set to ${det}`, "bot");
+      // speak the confirmation and continue in that language
+      try {
+        speak(det === "telugu" ? "భాష సెట్ చేయబడింది" : det === "hindi" ? "भाषा सेट कर दी गई" : "Language set");
+      } catch (e) {}
+
+      // move to next step
+      setupStep = 1;
+      initialLangAutoListen = false; // only auto-listen once
+      setTimeout(askAge, 600);
+      try { recognition.stop(); } catch (e) {}
+      return;
+    }
+
+    // Otherwise it's a normal mic-button initiated message/input
+    addMessage(spoken, "user");
     userInput.value = spoken;
     sendMessage();
-    micBtn.style.background = "";
+
+    // after finishing, recognition will end — keep voiceMode true so backend reply is spoken
+    // we'll reset voiceMode on recognition.onend
   };
 
-  recognition.onerror = () => { micBtn.style.background = ""; };
-  recognition.onend = () => { micBtn.style.background = ""; };
+  recognition.onerror = (ev) => {
+    console.error("recognition error", ev);
+    micBtn.style.background = "";
+    voiceMode = false;
+    if (!setupCompleteFlag && setupStep === 0 && initialLangAutoListen) {
+      hideTyping();
+      addMessage("I couldn't hear that. Please type the language or click mic to speak.", "bot");
+    }
+  };
+
+  recognition.onend = () => {
+    micBtn.style.background = "";
+    // Reset voiceMode — we only speak replies during the mic-initiated exchange
+    voiceMode = false;
+  };
 }
 
-function speak(text) {
-  if (!voiceMode) return;
-  const utter = new SpeechSynthesisUtterance(text);
-  if (profile.language === "telugu") utter.lang = "te-IN";
-  else if (profile.language === "hindi") utter.lang = "hi-IN";
-  else utter.lang = "en-US";
-  speechSynthesis.speak(utter);
-  voiceMode = false;
-}
+// ---------- createStars with parallax movement ----------
+const starsState = [];
 
-// Basic star + leaf UI (kept from original)
 function createStars(count = 40) {
   const starsContainer = document.getElementById("stars");
   if (!starsContainer) return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
   for (let i = 0; i < count; i++) {
     const star = document.createElement("div");
     star.classList.add("star");
-    star.style.top = Math.random() * 100 + "vh";
-    star.style.left = Math.random() * 100 + "vw";
-    star.style.animationDelay = Math.random() * 2 + "s";
-    star.style.transform = `scale(${Math.random() * 1.5})`;
+    const x = Math.random() * vw;
+    const y = Math.random() * vh;
+    const size = Math.random() * 2 + 1;
+    star.style.left = x + "px";
+    star.style.top = y + "px";
+    star.style.width = size + "px";
+    star.style.height = size + "px";
+    star.style.opacity = 0.4 + Math.random() * 0.7;
+    star.style.animation = `twinkle ${2 + Math.random() * 3}s infinite ${Math.random() * 2}s`;
     starsContainer.appendChild(star);
+    starsState.push({ el: star, x, y, depth: 0.2 + Math.random() * 0.8 });
   }
 }
-createStars(40);
+createStars(48);
 
-// Parallax
+// parallax on mouse move (smooth)
 document.addEventListener("mousemove", (e) => {
-  const x = e.clientX / window.innerWidth - 0.5;
-  const y = e.clientY / window.innerHeight - 0.5;
   document.querySelectorAll(".bg-shape").forEach((shape, i) => {
-    const speed = (i + 1) * 30;
-    shape.style.transform = `translate(${x * speed}px, ${y * speed}px)`;
+    const speed = (i + 1) * 20;
+    shape.style.transform = `translate(${(e.clientX - window.innerWidth/2) / window.innerWidth * speed}px, ${(e.clientY - window.innerHeight/2) / window.innerHeight * speed}px)`;
+  });
+
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  starsState.forEach(s => {
+    const dx = (e.clientX - cx) * s.depth * 0.02;
+    const dy = (e.clientY - cy) * s.depth * 0.02;
+    s.el.style.transform = `translate(${dx}px, ${dy}px)`;
   });
 });
 
-// small AgriPulse -> CureBot UI init (safe)
+window.addEventListener("resize", () => { /* nothing special needed */ });
+
+document.addEventListener("touchmove", (e) => {
+  if (e.touches && e.touches[0]) {
+    const t = e.touches[0];
+    const evt = new MouseEvent("mousemove", { clientX: t.clientX, clientY: t.clientY });
+    document.dispatchEvent(evt);
+  }
+}, { passive: true });
+
+// ---------- events ----------
+sendBtn.addEventListener("click", sendMessage);
+userInput.addEventListener("keypress", (e) => { if (e.key === "Enter") sendMessage(); });
+micBtn.addEventListener("click", () => {
+  // mic-initiated voice exchange only when user clicks mic
+  startMicForUserInput();
+});
+
+// ---------- small UI init ----------
 function initCureUI() {
   try {
     const title = document.querySelector(".app-title");
@@ -373,3 +556,5 @@ function initCureUI() {
   } catch (e) {}
 }
 initCureUI();
+
+// END of script.js
