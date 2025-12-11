@@ -255,7 +255,7 @@ body {
   font-size:15px;
 }
 
-#mic-btn, #send-btn {
+#mic-btn, #send-btn,#camera-btn {
   border:none;
   background: var(--blue);
   color:white;
@@ -266,7 +266,7 @@ body {
   box-shadow: 0 6px 18px rgba(21,101,192,0.08);
   transition: transform 120ms ease, background 100ms ease;
 }
-#mic-btn:hover, #send-btn:hover {
+#mic-btn:hover, #send-btn:hover ,#camera-btn:hover {
   transform: translateY(-2px);
   background: var(--blue-2);
 }
@@ -288,6 +288,38 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+.action-btn {
+  border: none;
+  background: var(--blue);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s ease;
+}
+
+.action-btn:hover {
+  background: var(--blue-2);
+}
+
+.send-btn {
+  border: none;
+  background: var(--blue);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.send-btn:hover {
+  background: var(--blue-2);
 }
 
 /* End of CSS */

@@ -5,7 +5,7 @@ const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
 const micBtn = document.getElementById("mic-btn");
-
+// State variables
 let voiceMode = false;                // true when mic-button initiated for that exchange
 let setupStep = 0;
 let profile = { language: "english", age: "", gender: "", symptoms: "" };
@@ -131,9 +131,9 @@ function safeWSSend(obj) {
 // ---------- Prompts ----------
 const Q = {
   language: {
-    english: "🌐 Please choose a language: 1. English /2. Telugu /3. Hindi",
-    telugu: "🌐 దయచేసి భాషను ఎంచుకోండి: 1. English /2. Telugu /3. Hindi",
-    hindi: "🌐 कृपया भाषा चुनें: 1. English /2. Telugu /3. Hindi"
+    english: "🌐 Please choose a language: 1. English 2. Telugu 3. Hindi",
+    telugu: "🌐 దయచేసి భాషను ఎంచుకోండి: 1. English 2. Telugu 3. Hindi",
+    hindi: "🌐 कृपया भाषा चुनें: 1. English 2. Telugu 3. Hindi"
   },
   askAge: {
     english: "🧾 What is your age?",
@@ -556,5 +556,47 @@ function initCureUI() {
   } catch (e) {}
 }
 initCureUI();
+// ------------------------------
+// IMAGE UPLOAD & ANALYSIS
+// ------------------------------
 
-// END of script.js
+// get HTML elements
+const cameraBtn = document.getElementById("camera-btn");
+const imageInput = document.getElementById("image-input");
+
+// when user clicks camera icon
+cameraBtn.addEventListener("click", () => {
+    imageInput.click(); // opens camera or file picker
+});
+
+// when an image is selected
+imageInput.addEventListener("change", async () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    addMessage("📸 Analyzing image…", "bot");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+        const res = await fetch("http://127.0.0.1:5000/analyze-image", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        addMessage(data.message, "bot");
+
+    } catch (err) {
+        console.error(err);
+        addMessage("❌ Unable to analyze the image.", "bot");
+    }
+
+    imageInput.value = ""; // reset
+});
+
+// ------------------------------
+// END OF SCRIPT
+// ------------------------------

@@ -1,8 +1,9 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
 import datetime
+import base64
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -63,6 +64,42 @@ User: {symptoms}
 """
     return final_prompt
 
+from base64 import b64encode
+@app.post("/analyze-image")
+async def analyze_image(file: UploadFile = File(...)):
+    try:
+        content = await file.read()
+        b64_data = base64.b64encode(content).decode()
+
+        payload = {
+            "contents": [{
+                "parts": [
+                    {
+                        "text": "Analyze this medical image. Identify tablets, medicine names, dosage strength, or prescription details. Respond clearly and safely."
+                    },
+                    {
+                        "inline_data": {
+                            "mime_type": file.content_type,
+                            "data": b64_data
+                        }
+                    }
+                ]
+            }]
+        }
+
+        ai_res = requests.post(
+            f"{API_URL}?key={API_KEY}",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=20
+        ).json()
+
+        reply = ai_res["candidates"][0]["content"]["parts"][0]["text"]
+        return {"message": reply}
+
+    except Exception as e:
+        print("IMAGE ANALYSIS ERROR:", e)
+        return {"message": "❌ Unable to analyze image. Please try a clearer photo."}
 
 # ------------------------------
 # WebSocket Chat
