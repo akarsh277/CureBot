@@ -1,6 +1,13 @@
 // CureBot frontend — Patched script.js (fade animations + initial voice language-detect + mic-on-click voice)
 
 // Get DOM elements
+function wakeBackend() {
+    fetch("https://curebot-uuey.onrender.com/")
+        .catch(err => console.log("Backend waking…"));
+}
+wakeBackend();
+setInterval(wakeBackend, 45000); // keep alive every 45 sec
+
 const sendBtn = document.getElementById("send-btn");
 const userInput = document.getElementById("user-input");
 const chatBox = document.getElementById("chat-box");
