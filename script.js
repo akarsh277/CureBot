@@ -69,16 +69,29 @@ function hideTyping() {
   if (el) el.remove();
 }
 
-// ---------- WebSocket ----------
+// ---------- WebSocket (Auto Switch: Local / Render) ----------
+function getWSUrl() {
+  const isLocal = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+  return isLocal
+    ? "ws://127.0.0.1:5000/ws"
+    : "wss://curebot-uuey.onrender.com/ws";
+}
+
 let ws = null;
 let wsReconnectTimer = null;
+
 function initWebSocket() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-  ws = new WebSocket("ws://127.0.0.1:5000/ws");
+
+  const wsUrl = getWSUrl();
+  ws = new WebSocket(wsUrl);
 
   ws.onopen = () => {
-    console.log("WS CONNECTED 🔗");
-    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    console.log("WS CONNECTED 🔗 →", wsUrl);
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
   };
 
   ws.onmessage = (event) => {
@@ -86,20 +99,22 @@ function initWebSocket() {
       const data = JSON.parse(event.data);
       hideTyping();
 
-      // Display bot reply (avatar shown)
+      // Always show bot reply with avatar
       addMessage(data.message, "bot");
 
-      // Speak only if voiceMode is active (i.e., mic clicked for this exchange)
+      // Speak only if user enabled mic this time
       if (voiceMode) {
-        try { speak(data.message); } catch (e) { console.error("TTS error", e); }
+        try { speak(data.message); } 
+        catch (e) { console.error("TTS error", e); }
       }
+
     } catch (e) {
       console.error("WS parse error", e);
     }
   };
 
   ws.onclose = (ev) => {
-    console.warn("WS closed. Reconnecting...", ev);
+    console.warn("WS CLOSED. Reconnecting...", ev);
     hideTyping();
     if (!wsReconnectTimer) {
       wsReconnectTimer = setTimeout(() => initWebSocket(), 2000);
@@ -107,10 +122,11 @@ function initWebSocket() {
   };
 
   ws.onerror = (err) => {
-    console.error("WS error", err);
-    try { ws.close(); } catch (e) {}
+    console.error("WS ERROR", err);
+    try { ws.close(); } catch {}
   };
 }
+
 initWebSocket();
 
 function safeWSSend(obj) {
@@ -570,31 +586,38 @@ cameraBtn.addEventListener("click", () => {
 });
 
 // when an image is selected
+// Auto-detect backend URL
+function getAPIUrl() {
+  const isLocal = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+  return isLocal
+    ? "http://127.0.0.1:5000/analyze_image"
+    : "https://curebot-uuey.onrender.com/analyze_image";
+}
+
 imageInput.addEventListener("change", async () => {
-    const file = imageInput.files[0];
-    if (!file) return;
+  const file = imageInput.files[0];
+  if (!file) return;
 
-    addMessage("📸 Analyzing image…", "bot");
+  addMessage("📸 Analyzing image…", "bot");
 
-    const formData = new FormData();
-    formData.append("file", file);
+  const formData = new FormData();
+  formData.append("file", file);
 
-    try {
-        const res = await fetch("http://127.0.0.1:5000/analyze-image", {
-            method: "POST",
-            body: formData
-        });
+  try {
+    const res = await fetch(getAPIUrl(), {
+      method: "POST",
+      body: formData
+    });
 
-        const data = await res.json();
+    const data = await res.json();
+    addMessage(data.message, "bot");
 
-        addMessage(data.message, "bot");
+  } catch (err) {
+    console.error("IMG ERROR:", err);
+    addMessage("❌ Unable to analyze the image right now.", "bot");
+  }
 
-    } catch (err) {
-        console.error(err);
-        addMessage("❌ Unable to analyze the image.", "bot");
-    }
-
-    imageInput.value = ""; // reset
+  imageInput.value = "";
 });
 
 // ------------------------------
